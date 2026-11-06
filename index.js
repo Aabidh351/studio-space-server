@@ -65,6 +65,34 @@ app.get("/api/studios/featured", async (req, res) => {
   }
 });
 
+app.get("/api/categories", async (req, res) => {
+  try {
+    const categories = await db
+      .collection("categories")
+      .find()
+      .sort({ order: 1 })
+      .toArray();
+
+    res.send(categories);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to fetch categories" });
+  }
+});
+
+app.get("/api/steps", async (req, res) => {
+  try {
+    const steps = await db
+      .collection("steps")
+      .find()
+      .sort({ number: 1 })
+      .toArray();
+
+    res.send(steps);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to fetch steps" });
+  }
+});
+
 const startServer = async () => {
   await connectDB();
 
