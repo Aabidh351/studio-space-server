@@ -1,7 +1,7 @@
 
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
 
 const app = express();
@@ -62,6 +62,36 @@ app.get("/api/studios/featured", async (req, res) => {
     res.send(studios);
   } catch (error) {
     res.status(500).send({ message: "Failed to fetch featured studios" });
+  }
+});
+
+app.get("/api/studios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        message: "Invalid studio ID",
+      });
+    }
+
+    const studio = await db.collection("studios").findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!studio) {
+      return res.status(404).send({
+        message: "Studio not found",
+      });
+    }
+
+    res.send(studio);
+  } catch (error) {
+    console.error("Get studio error:", error);
+
+    res.status(500).send({
+      message: "Failed to fetch studio",
+    });
   }
 });
 
