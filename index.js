@@ -198,6 +198,32 @@ app.get("/api/steps", async (req, res) => {
   }
 });
 
+app.get("/api/my-listings", async (req, res) => {
+  try {
+    const { ownerEmail } = req.query;
+
+    if (!ownerEmail) {
+      return res.status(400).send({
+        message: "Owner email is required.",
+      });
+    }
+
+    const studios = await db
+      .collection("studios")
+      .find({ ownerEmail })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(studios);
+  } catch (error) {
+    console.error("My listings error:", error);
+
+    res.status(500).send({
+      message: "Failed to fetch your listings.",
+    });
+  }
+});
+
 const startServer = async () => {
   await connectDB();
 
