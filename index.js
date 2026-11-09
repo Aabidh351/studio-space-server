@@ -49,6 +49,81 @@ app.get("/api/studios", async (req, res) => {
   }
 });
 
+app.post("/api/studios", async (req, res) => {
+  try {
+    const {
+      title,
+      category,
+      hourlyRate,
+      securityDeposit,
+      maxCapacity,
+      location,
+      imageUrl,
+      amenities,
+      overview,
+      ownerName,
+      ownerEmail,
+    } = req.body;
+
+    if (
+      !title ||
+      !category ||
+      !hourlyRate ||
+      securityDeposit === undefined ||
+      !maxCapacity ||
+      !location ||
+      !imageUrl ||
+      !overview ||
+      !ownerName ||
+      !ownerEmail ||
+      !Array.isArray(amenities) ||
+      amenities.length === 0
+    ) {
+      return res.status(400).send({
+        message: "Please provide all required studio information.",
+      });
+    }
+
+    if (
+      Number(hourlyRate) <= 0 ||
+      Number(securityDeposit) < 0 ||
+      Number(maxCapacity) <= 0
+    ) {
+      return res.status(400).send({
+        message: "Please provide valid rate, deposit, and capacity values.",
+      });
+    }
+
+    const newStudio = {
+      title: title.trim(),
+      category,
+      hourlyRate: Number(hourlyRate),
+      securityDeposit: Number(securityDeposit),
+      maxCapacity: Number(maxCapacity),
+      location: location.trim(),
+      imageUrl: imageUrl.trim(),
+      amenities,
+      overview: overview.trim(),
+      ownerName,
+      ownerEmail,
+      createdAt: new Date(),
+    };
+
+    const result = await db.collection("studios").insertOne(newStudio);
+
+    res.status(201).send({
+      message: "Studio created successfully!",
+      insertedId: result.insertedId,
+    });
+  } catch (error) {
+    console.error("Add studio error:", error);
+
+    res.status(500).send({
+      message: "Failed to create studio.",
+    });
+  }
+});
+
 
 app.get("/api/studios/featured", async (req, res) => {
   try {
