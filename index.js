@@ -224,6 +224,37 @@ app.get("/api/my-listings", async (req, res) => {
   }
 });
 
+app.delete("/api/studios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { ownerEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid studio ID." });
+    }
+
+    if (!ownerEmail) {
+      return res.status(400).send({ message: "Owner email is required." });
+    }
+
+    const result = await db.collection("studios").deleteOne({
+      _id: new ObjectId(id),
+      ownerEmail,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        message: "Studio not found or you are not authorized to delete it.",
+      });
+    }
+
+    res.send({ message: "Studio deleted successfully!" });
+  } catch (error) {
+    console.error("Delete studio error:", error);
+    res.status(500).send({ message: "Failed to delete studio." });
+  }
+});
+
 const startServer = async () => {
   await connectDB();
 
