@@ -455,6 +455,35 @@ app.post("/api/bookings", async (req, res) => {
 });
 
 
+app.get("/api/my-bookings", async (req, res) => {
+  try {
+    const { customerEmail } = req.query;
+
+    if (!customerEmail) {
+      return res.status(400).send({
+        message: "Customer email is required.",
+      });
+    }
+
+    const bookings = await db
+      .collection("bookings")
+      .find({
+        customerEmail: customerEmail.toLowerCase(),
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(bookings);
+  } catch (error) {
+    console.error("Get my bookings error:", error);
+
+    res.status(500).send({
+      message: "Failed to fetch bookings.",
+    });
+  }
+});
+
+
 
 const startServer = async () => {
   await connectDB();
