@@ -255,6 +255,90 @@ app.delete("/api/studios/:id", async (req, res) => {
   }
 });
 
+
+app.put("/api/studios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      category,
+      hourlyRate,
+      securityDeposit,
+      maxCapacity,
+      location,
+      imageUrl,
+      amenities,
+      overview,
+      ownerEmail,
+    } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid studio ID." });
+    }
+
+    if (
+      !title ||
+      !category ||
+      !location ||
+      !imageUrl ||
+      !overview ||
+      !ownerEmail ||
+      !Array.isArray(amenities) ||
+      amenities.length === 0
+    ) {
+      return res.status(400).send({
+        message: "Please provide all required studio information.",
+      });
+    }
+
+    if (
+      Number(hourlyRate) <= 0 ||
+      Number(securityDeposit) < 0 ||
+      Number(maxCapacity) <= 0
+    ) {
+      return res.status(400).send({
+        message: "Please provide valid rate, deposit, and capacity values.",
+      });
+    }
+
+    const result = await db.collection("studios").updateOne(
+      {
+        _id: new ObjectId(id),
+        ownerEmail,
+      },
+      {
+        $set: {
+          title: title.trim(),
+          category,
+          hourlyRate: Number(hourlyRate),
+          securityDeposit: Number(securityDeposit),
+          maxCapacity: Number(maxCapacity),
+          location: location.trim(),
+          imageUrl: imageUrl.trim(),
+          amenities,
+          overview: overview.trim(),
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        message: "Studio not found or you are not authorized to edit it.",
+      });
+    }
+
+    res.send({ message: "Studio updated successfully!" });
+  } catch (error) {
+    console.error("Update studio error:", error);
+
+    res.status(500).send({
+      message: "Failed to update studio.",
+    });
+  }
+});
+
+
 const startServer = async () => {
   await connectDB();
 
