@@ -339,6 +339,123 @@ app.put("/api/studios/:id", async (req, res) => {
 });
 
 
+app.post("/api/bookings", async (req, res) => {
+  try {
+    const {
+      studioId,
+      bookingDate,
+      startTime,
+      endTime,
+      customerName,
+      customerEmail,
+    } = req.body;
+
+    if (
+      !studioId ||
+      !bookingDate ||
+      !startTime ||
+      !endTime ||
+      !customerName ||
+      !customerEmail
+    ) {
+      return res.status(400).send({
+        message: "Please provide all booking information.",
+      });
+    }
+
+    if (!ObjectId.isValid(studioId)) {
+      return res.status(400).send({ message: "Invalid studio ID." });
+    }
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(bookingDate) ||
+      !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startTime) ||
+      !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(endTime)
+    ) {
+      return res.status(400).send({
+        message: "Invalid booking date or time.",
+      });
+    }
+
+    if (startTime >= endTime) {
+      return res.status(400).send({
+        message: "End time must be later than start time.",
+      });
+    }
+
+    const selectedDate = new Date(`${bookingDate}T${startTime}:00`);
+    const now = new Date();
+
+    if (Number.isNaN(selectedDate.getTime()) || selectedDate <= now) {
+      return res.status(400).send({
+        message: "Please select a future booking date and time.",
+      });
+    }
+
+    const studio = await db.collection("studios").findOne({
+      _id: new ObjectId(studioId),
+    });
+
+    if (!studio) {
+      return res.status(404).send({ message: "Studio not found." });
+    }
+
+    const existingBooking = await db.collection("bookings").findOne({
+      studioId,
+      bookingDate,
+      status: "Confirmed",
+      startTime: { $lt: endTime },
+      endTime: { $gt: startTime },
+    });
+
+    if (existingBooking) {
+      return res.status(409).send({
+        message: "This time slot is already booked.",
+      });
+    }
+
+    const duration =
+      (new Date(`1970-01-01T${endTime}:00`).getTime() -
+        new Date(`1970-01-01T${startTime}:00`).getTime()) /
+      (1000 * 60 * 60);
+
+    const totalAmount = duration * studio.hourlyRate;
+
+    const newBooking = {
+      studioId,
+      studioTitle: studio.title,
+      ownerName: studio.ownerName,
+      ownerEmail: studio.ownerEmail,
+      customerName: customerName.trim(),
+      customerEmail: customerEmail.trim().toLowerCase(),
+      bookingDate,
+      startTime,
+      endTime,
+      duration,
+      hourlyRate: studio.hourlyRate,
+      securityDeposit: studio.securityDeposit,
+      totalAmount,
+      status: "Pending",
+      createdAt: new Date(),
+    };
+
+    const result = await db.collection("bookings").insertOne(newBooking);
+
+    res.status(201).send({
+      message: "Booking request submitted successfully!",
+      bookingId: result.insertedId,
+    });
+  } catch (error) {
+    console.error("Create booking error:", error);
+
+    res.status(500).send({
+      message: "Failed to create booking.",
+    });
+  }
+});
+
+
+
 const startServer = async () => {
   await connectDB();
 
