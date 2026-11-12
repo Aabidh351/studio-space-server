@@ -483,6 +483,33 @@ app.get("/api/my-bookings", async (req, res) => {
   }
 });
 
+app.get("/api/booking-requests", async (req, res) => {
+  try {
+    const { ownerEmail } = req.query;
+
+    if (!ownerEmail) {
+      return res.status(400).send({
+        message: "Owner email is required.",
+      });
+    }
+
+    const bookings = await db
+      .collection("bookings")
+      .find({
+        ownerEmail: ownerEmail.toLowerCase(),
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(bookings);
+  } catch (error) {
+    console.error("Get booking requests error:", error);
+
+    res.status(500).send({
+      message: "Failed to fetch booking requests.",
+    });
+  }
+});
 
 
 const startServer = async () => {
