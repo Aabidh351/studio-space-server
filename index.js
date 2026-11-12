@@ -582,6 +582,46 @@ app.patch("/api/bookings/:id/status", async (req, res) => {
   }
 });
 
+app.patch("/api/bookings/:id/cancel", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { customerEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid booking ID." });
+    }
+
+    if (!customerEmail) {
+      return res.status(400).send({ message: "Customer email is required." });
+    }
+
+    const result = await db.collection("bookings").updateOne(
+      {
+        _id: new ObjectId(id),
+        customerEmail: customerEmail.toLowerCase(),
+        status: "Pending",
+      },
+      {
+        $set: {
+          status: "Cancelled",
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        message: "Pending booking not found or you are not authorized.",
+      });
+    }
+
+    res.send({ message: "Booking cancelled successfully!" });
+  } catch (error) {
+    console.error("Cancel booking error:", error);
+
+    res.status(500).send({ message: "Failed to cancel booking." });
+  }
+});
 
 
 const startServer = async () => {
