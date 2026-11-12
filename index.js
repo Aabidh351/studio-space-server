@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
+import cookieParser from "cookie-parser";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -13,6 +15,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(cookieParser());
 
 
 const client = new MongoClient(process.env.MONGO_URI);
@@ -26,6 +29,51 @@ const connectDB = async () => {
   } catch (error) {
     console.error("MongoDB connection failed:", error);
     process.exit(1);
+  }
+};
+
+const authBaseURL = process.env.BETTER_AUTH_URL;
+
+const JWKS = createRemoteJWKSet(
+  new URL("/api/auth/jwks", authBaseURL)
+);
+
+const authenticate = async (req, res, next) => {
+  const token =
+    req.cookies?.["better-auth.session_data"] ||
+    req.cookies?.["__Secure-better-auth.session_data"];
+
+  if (!token) {
+    return res.status(401).send({
+      message: "Unauthorized. Please log in.",
+    });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: authBaseURL,
+      audience: authBaseURL,
+    });
+
+    const user = payload.session?.user;
+
+    if (!user?.email) {
+      return res.status(401).send({
+        message: "Invalid authentication token.",
+      });
+    }
+
+    req.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+    };
+
+    next();
+  } catch (error) {
+    return res.status(401).send({
+      message: "Invalid or expired authentication token.",
+    });
   }
 };
 
@@ -49,7 +97,7 @@ app.get("/api/studios", async (req, res) => {
   }
 });
 
-app.post("/api/studios", async (req, res) => {
+app.post("/api/studios", authenticate, async (req, res) => {
   try {
     const {
       title,
@@ -224,7 +272,7 @@ app.get("/api/my-listings", async (req, res) => {
   }
 });
 
-app.delete("/api/studios/:id", async (req, res) => {
+app.delete("/api/studios/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { ownerEmail } = req.body;
@@ -339,7 +387,7 @@ app.put("/api/studios/:id", async (req, res) => {
 });
 
 
-app.post("/api/bookings", async (req, res) => {
+app.post("/api/bookings", authenticate, async (req, res) => {
   try {
     const {
       studioId,
@@ -511,6 +559,7 @@ app.get("/api/booking-requests", async (req, res) => {
   }
 });
 
+
 app.patch("/api/bookings/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
@@ -520,7 +569,10 @@ app.patch("/api/bookings/:id/status", async (req, res) => {
       return res.status(400).send({ message: "Invalid booking ID." });
     }
 
-    if (!ownerEmail || !["Confirmed", "Cancelled"].includes(status)) {
+    if (
+      !ownerEmail ||
+      !["Confirmed", "Cancelled", "Completed"].includes(status)
+    ) {
       return res.status(400).send({
         message: "Invalid booking information.",
       });
@@ -537,9 +589,18 @@ app.patch("/api/bookings/:id/status", async (req, res) => {
       });
     }
 
-    if (booking.status !== "Pending") {
+    if (
+      (status === "Confirmed" || status === "Cancelled") &&
+      booking.status !== "Pending"
+    ) {
       return res.status(400).send({
-        message: "Only pending bookings can be updated.",
+        message: "Only pending bookings can be confirmed or cancelled.",
+      });
+    }
+
+    if (status === "Completed" && booking.status !== "Confirmed") {
+      return res.status(400).send({
+        message: "Only confirmed bookings can be completed.",
       });
     }
 
@@ -560,8 +621,12 @@ app.patch("/api/bookings/:id/status", async (req, res) => {
       }
     }
 
-    await db.collection("bookings").updateOne(
-      { _id: new ObjectId(id), ownerEmail: ownerEmail.toLowerCase(), status: "Pending" },
+    const result = await db.collection("bookings").updateOne(
+      {
+        _id: new ObjectId(id),
+        ownerEmail: ownerEmail.toLowerCase(),
+        status: booking.status,
+      },
       {
         $set: {
           status,
@@ -569,6 +634,12 @@ app.patch("/api/bookings/:id/status", async (req, res) => {
         },
       }
     );
+
+    if (result.modifiedCount === 0) {
+      return res.status(409).send({
+        message: "Booking status has already changed. Please refresh.",
+      });
+    }
 
     res.send({
       message: `Booking ${status.toLowerCase()} successfully!`,
@@ -581,6 +652,7 @@ app.patch("/api/bookings/:id/status", async (req, res) => {
     });
   }
 });
+
 
 app.patch("/api/bookings/:id/cancel", async (req, res) => {
   try {
