@@ -20,17 +20,29 @@ app.use(cookieParser());
 
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
+let dbPromise;
 
 const connectDB = async () => {
-  try {
-    await client.connect();
-    db = client.db("studiospace");
-    console.log("MongoDB connected!");
-  } catch (error) {
-    console.error("MongoDB connection failed:", error);
-    process.exit(1);
+  if (db) return db;
+
+  if (!dbPromise) {
+    dbPromise = client
+      .connect()
+      .then(() => {
+        db = client.db("studiospace");
+        console.log("MongoDB connected!");
+        return db;
+      })
+      .catch((error) => {
+        dbPromise = null; // allow a retry on the next request
+        throw error;
+      });
   }
+
+  return dbPromise;
 };
+
+connectDB();
 
 const authBaseURL = process.env.BETTER_AUTH_URL;
 
@@ -80,6 +92,16 @@ const authenticate = async (req, res, next) => {
 
 app.get("/", (req, res) => {
   res.send({ message: "StudioSpace API is running!" });
+});
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("Database connection error:", error);
+    res.status(500).json({ message: "Database connection failed" });
+  }
 });
 
 
@@ -696,12 +718,8 @@ app.patch("/api/bookings/:id/cancel", async (req, res) => {
 });
 
 
-const startServer = async () => {
-  await connectDB();
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-};
-
-startServer();
+export default app;
