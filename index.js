@@ -511,6 +511,78 @@ app.get("/api/booking-requests", async (req, res) => {
   }
 });
 
+app.patch("/api/bookings/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { ownerEmail, status } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid booking ID." });
+    }
+
+    if (!ownerEmail || !["Confirmed", "Cancelled"].includes(status)) {
+      return res.status(400).send({
+        message: "Invalid booking information.",
+      });
+    }
+
+    const booking = await db.collection("bookings").findOne({
+      _id: new ObjectId(id),
+      ownerEmail: ownerEmail.toLowerCase(),
+    });
+
+    if (!booking) {
+      return res.status(404).send({
+        message: "Booking not found or you are not authorized.",
+      });
+    }
+
+    if (booking.status !== "Pending") {
+      return res.status(400).send({
+        message: "Only pending bookings can be updated.",
+      });
+    }
+
+    if (status === "Confirmed") {
+      const existingBooking = await db.collection("bookings").findOne({
+        _id: { $ne: new ObjectId(id) },
+        studioId: booking.studioId,
+        bookingDate: booking.bookingDate,
+        status: "Confirmed",
+        startTime: { $lt: booking.endTime },
+        endTime: { $gt: booking.startTime },
+      });
+
+      if (existingBooking) {
+        return res.status(409).send({
+          message: "This time slot conflicts with another confirmed booking.",
+        });
+      }
+    }
+
+    await db.collection("bookings").updateOne(
+      { _id: new ObjectId(id), ownerEmail: ownerEmail.toLowerCase(), status: "Pending" },
+      {
+        $set: {
+          status,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    res.send({
+      message: `Booking ${status.toLowerCase()} successfully!`,
+    });
+  } catch (error) {
+    console.error("Update booking status error:", error);
+
+    res.status(500).send({
+      message: "Failed to update booking status.",
+    });
+  }
+});
+
+
 
 const startServer = async () => {
   await connectDB();
